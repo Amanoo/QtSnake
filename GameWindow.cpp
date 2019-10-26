@@ -337,12 +337,12 @@ void timer_interrupt() {
 
 static void init_key_interrupt(volatile GameData *reg)
 {
-    // We first need to enable the interrupts. We have two buttons which are mapped to bit 0 and 1.
-    IOWR_ALTERA_AVALON_PIO_IRQ_MASK(KEY_PIO_BASE, 0x03);
+    // We first need to enable the interrupts. We have two buttons which are mapped to bit 0, 1, 2, and 3.
+    IOWR_ALTERA_AVALON_PIO_IRQ_MASK(KEY_PIO_BASE, 0x0F);
 
     // To make sure that the interrupts don't trigger immediately due to randomness,
     // it's better to reset them just to be sure.
-    IOWR_ALTERA_AVALON_PIO_EDGE_CAP(KEY_PIO_BASE, 0x03);
+    IOWR_ALTERA_AVALON_PIO_EDGE_CAP(KEY_PIO_BASE, 0x0F);
 
     // We can also provide it with a variable, the context.
     // In this example we want it to point to a volatile int in which the triggered pin bit will be saved.
