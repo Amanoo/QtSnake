@@ -366,6 +366,10 @@ int mmain(void){
     gameData.current->next = gameData.current;
 
     //setupinterrupts
+    while(1){
+
+    }
+    return 0;
 }
 
 
