@@ -335,9 +335,28 @@ void timer_interrupt() {
   }
 }
 
+static void init_key_interrupt(volatile GameData *reg)
+{
+    // We first need to enable the interrupts. We have two buttons which are mapped to bit 0 and 1.
+    IOWR_ALTERA_AVALON_PIO_IRQ_MASK(KEY_PIO_BASE, 0x03);
 
+    // To make sure that the interrupts don't trigger immediately due to randomness,
+    // it's better to reset them just to be sure.
+    IOWR_ALTERA_AVALON_PIO_EDGE_CAP(KEY_PIO_BASE, 0x03);
+
+    // We can also provide it with a variable, the context.
+    // In this example we want it to point to a volatile int in which the triggered pin bit will be saved.
+    // The function only takes a void pointer, so we first need to take the address and then cast it to a void pointer.
+    void* reg_ptr = (void*)reg;
+
+    // Now we let the system know what to do when the interrupt happens.
+    // It should call the function handle_key_interrupts.
+    // Flags don't do anything, so let's just give NULL as value.
+    alt_ic_isr_register(KEY_PIO_IRQ_INTERRUPT_CONTROLLER_ID, KEY_PIO_IRQ, handle_key_interrupts, reg_ptr, NULL);
+}
 
 int mmain(void){
+    init_key_interrupt(&gameData);
     for (int I = 0; I < WIDTH * HEIGHT; I++) {
       gameData.bitmap[I] = 0x80;
     }
