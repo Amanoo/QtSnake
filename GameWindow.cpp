@@ -11,7 +11,7 @@
 
 #define NORMAL_SNAKE
 
-uint8_t IORD_ALTERA_AVALON_PIO_EDGE_CAP_KEY_PIO_BASE = 0;
+
 
 constexpr int WIDTH = 16;
 constexpr int HEIGHT = 16;
@@ -59,11 +59,11 @@ static void handle_key_interrupts(void* context)
     volatile GameData* data = (volatile GameData *)context;
 
     // Get the pin that has triggered the edge interrupt
-    int edge_pin = IORD_ALTERA_AVALON_PIO_EDGE_CAP_KEY_PIO_BASE;
+    int edge_pin = IOWR_ALTERA_AVALON_PIO_EDGE_CAP(KEY_PIO_BASE);
 
     // To prevent the interrupt from happening again without it being triggered, we need to reset it
     // To do that, we'll write the pin bit to the edge capture register. It will then be reset.
-    ////IOWR_ALTERA_AVALON_PIO_EDGE_CAP(KEY_PIO_BASE, edge_pin);
+    IOWR_ALTERA_AVALON_PIO_EDGE_CAP(KEY_PIO_BASE, edge_pin);
 
     if(!data->running){
         data->running=2;
@@ -212,42 +212,9 @@ inline size_t posToBitmapIndex(Point pt) {
 }
 
 
-GameWindow::GameWindow(QWidget *parent)
-    : QWidget(parent), sprites(":/sprites.png") {
-    gameData.bitmap = bitmap.data();
-  setMinimumSize(WIDTH * sprites.width() / 32, HEIGHT * sprites.height() / 32);
-  startTimer(400);
 
-  for (int I = 0; I < WIDTH * HEIGHT; I++) {
-    bitmap[I] = 0x80;
-  }
-  std::strcpy((char*)bitmap.data(), "Press any key tobegin");
 
-  gameData.current = new SnakeNode;
-  gameData.current->next = gameData.current;
 
-}
-
-GameWindow::~GameWindow() {}
-
-void GameWindow::paintEvent(QPaintEvent *event) {
-  QPainter paint(this);
-  paint.setPen(Qt::cyan);
-
-  int scale = qMin(width() / WIDTH, height() / HEIGHT);
-
-  for (int X = 0; X < WIDTH; X++) {
-    for (int Y = 0; Y < HEIGHT; Y++) {
-      QRect tile(QPoint{X, Y} * scale, QSize(scale, scale));
-      int idx = bitmap[X+Y*WIDTH];
-      paint.drawPixmap(tile, sprites,
-                       QRect(QPoint{idx % 16, idx / 16} * sprites.width() / 16,
-                             sprites.size()/16));
-//      paint.drawText(tile, Qt::AlignCenter, QString("%1").arg(idx, 1, 16));
-//      paint.drawRect(tile);
-    }
-  }
-}
 
 /*
 
@@ -257,7 +224,7 @@ void GameWindow::paintEvent(QPaintEvent *event) {
 
 */
 
-void GameWindow::timerEvent(QTimerEvent *event) {
+void timer_interrupt() {
   if(!gameData.running)return;
     // Change direction on new tick
   gameData.direction = gameData.newDirection;
@@ -300,7 +267,7 @@ void GameWindow::timerEvent(QTimerEvent *event) {
     gameData.current->next->next = ins;
   } else if (getPosition(gameData.current->pos) != 0) {
     gameData.running=1;
-    std::strcpy((char*)bitmap.data(), "    GAME OVER");
+    std::strcpy((char*)gameData.bitmap, "    GAME OVER");
   } else {
     setPosition(gameData.current->pos, 2 + gameData.direction + (getPosition(future) != 0?0x24:0));
   }
@@ -353,7 +320,7 @@ void GameWindow::timerEvent(QTimerEvent *event) {
 //  }
 
   qDebug() << "Prev: " << getPosition(gameData.previous->pos) << " -> " << gameData.direction;
-  update();
+
   SnakeNode *ptr = gameData.current->next;
   qDebug() << "Positions";
   do {
@@ -370,11 +337,55 @@ void GameWindow::timerEvent(QTimerEvent *event) {
 
 
 
+int mmain(void){
+    for (int I = 0; I < WIDTH * HEIGHT; I++) {
+      gameData.bitmap[I] = 0x80;
+    }
+    std::strcpy((char*)gameData.bitmap, "Press any key tobegin");
 
+    gameData.current = new SnakeNode;
+    gameData.current->next = gameData.current;
+
+    //setupinterrupts
+}
 
 
 /////////////////////////////////////////////////////////////////////////////////////////
+GameWindow::GameWindow(QWidget *parent)
+    : QWidget(parent), sprites(":/sprites.png") {
+    gameData.bitmap = bitmap.data();
+  setMinimumSize(WIDTH * sprites.width() / 32, HEIGHT * sprites.height() / 32);
+  startTimer(400);
 
+  mmain();
+
+}
+
+GameWindow::~GameWindow() {}
+
+void GameWindow::paintEvent(QPaintEvent *event) {
+  QPainter paint(this);
+  paint.setPen(Qt::cyan);
+
+  int scale = qMin(width() / WIDTH, height() / HEIGHT);
+
+  for (int X = 0; X < WIDTH; X++) {
+    for (int Y = 0; Y < HEIGHT; Y++) {
+      QRect tile(QPoint{X, Y} * scale, QSize(scale, scale));
+      int idx = bitmap[X+Y*WIDTH];
+      paint.drawPixmap(tile, sprites,
+                       QRect(QPoint{idx % 16, idx / 16} * sprites.width() / 16,
+                             sprites.size()/16));
+//      paint.drawText(tile, Qt::AlignCenter, QString("%1").arg(idx, 1, 16));
+//      paint.drawRect(tile);
+    }
+  }
+}
+
+void GameWindow::timerEvent(QTimerEvent *event) {
+    timer_interrupt();
+    update();
+}
 
 void GameWindow::keyPressEvent(QKeyEvent *event) {
   switch (event->key()) {
