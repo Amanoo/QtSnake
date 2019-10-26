@@ -46,12 +46,12 @@ static volatile struct GameData{
     SnakeNode *current, *previous;
 } gameData;
 
-void spawnFood();
+void spawnFood(volatile GameData * data);
 
-void resetSnake();
+void resetSnake(volatile GameData * data);
 
-void setPosition(Point pos, int sprite);
-int getPosition(Point pos);
+void setPosition(volatile GameData * data, Point pos, int sprite);
+int getPosition(volatile GameData * data, Point pos);
 
 
 static void handle_key_interrupts(void* context)
@@ -67,8 +67,8 @@ static void handle_key_interrupts(void* context)
 
     if(!data->running){
         data->running=2;
-        resetSnake();
-        spawnFood();
+        resetSnake(data);
+        spawnFood(data);
         return;
     }
   switch (edge_pin) {
@@ -113,22 +113,22 @@ static void init_key_interrupt(volatile int *reg)
     alt_ic_isr_register(KEY_PIO_IRQ_INTERRUPT_CONTROLLER_ID, KEY_PIO_IRQ, handle_key_interrupts, reg_ptr, NULL);
 }*/
 
-void setPosition(Point pos, int sprite) {
-  gameData.bitmap[(pos.y() * WIDTH + pos.x())] = (size_t(sprite) & 0xFFUL) | 0x80UL;
+void setPosition(volatile GameData * data, Point pos, int sprite) {
+  data->bitmap[(pos.y() * WIDTH + pos.x())] = (size_t(sprite) & 0xFFUL) | 0x80UL;
 }
 
-int getPosition(Point pos) {
-  return gameData.bitmap[(pos.y() * WIDTH + pos.x())] & 0x7F;
+int getPosition(volatile GameData * data, Point pos) {
+  return data->bitmap[(pos.y() * WIDTH + pos.x())] & 0x7F;
 }
 
-void spawnFood() {
+void spawnFood(volatile GameData * data) {
 #if 1
   Point validPoints[HEIGHT*WIDTH];
   uint16_t size = 0;
   for (int wid =0;wid<WIDTH;wid++) {
       for (int hei=0;hei<HEIGHT;hei++){
           Point pos = Point{wid, hei};
-          if(getPosition(pos)==0){
+          if(data, getPosition(data, pos)==0){
             validPoints[size]=pos;
             size++;
           }
@@ -136,7 +136,7 @@ void spawnFood() {
   }
 
   int chosen=rand() % size;
-  setPosition(validPoints[chosen], 1);
+  setPosition(data, validPoints[chosen], 1);
 #else
   QPoint pos{qrand() % WIDTH, qrand() % HEIGHT};
 
@@ -149,41 +149,41 @@ void spawnFood() {
 
 
 
-void resetSnake() {
-memset(gameData.bitmap,0x80,WIDTH*HEIGHT);
+void resetSnake(volatile GameData * data) {
+memset(data->bitmap,0x80,WIDTH*HEIGHT);
 #ifdef NORMAL_SNAKE
-    gameData.direction = gameData.newDirection = 0;
-  while (gameData.current->next != gameData.current) {
-    SnakeNode *del = gameData.current->next;
-    gameData.current->next = gameData.current->next->next;
-    setPosition(del->pos, 0);
+    data->direction = data->newDirection = 0;
+  while (data->current->next != data->current) {
+    SnakeNode *del = data->current->next;
+    data->current->next = data->current->next->next;
+    setPosition(data, del->pos, 0);
     delete del;
   }
 
   for (int wid =0;wid<WIDTH;wid++) {
       for (int hei=0;hei<HEIGHT;hei++){
           Point pos = Point{wid, hei};
-          if(getPosition(pos)==1){
-              setPosition(pos,0);
+          if(getPosition(data, pos)==1){
+              setPosition(data, pos,0);
           }
       }
 
   }
 
-  gameData.current->pos = Point{WIDTH / 2, HEIGHT / 2};
-  setPosition(gameData.current->pos, 0x02);
-  gameData.previous = gameData.current;
+  data->current->pos = Point{WIDTH / 2, HEIGHT / 2};
+  setPosition(data, data->current->pos, 0x02);
+  data->previous = data->current;
 
 
   for (int I = 0; I < 4; I++) {
-    gameData.current = (gameData.current->next = new SnakeNode);
-    gameData.current->pos = Point{WIDTH / 2 - 4 + I, HEIGHT/2};
-    setPosition(gameData.current->pos, 0x12 - (I==0?12:0));
+    data->current = (data->current->next = new SnakeNode);
+    data->current->pos = Point{WIDTH / 2 - 4 + I, HEIGHT/2};
+    setPosition(data, data->current->pos, 0x12 - (I==0?12:0));
   }
-  gameData.current->next = gameData.previous;
+  data->current->next = data->previous;
 
 
-  gameData.previous = gameData.current->next;
+  data->previous = data->current->next;
 
 #else
   while (current->next->pos != current->pos && current->next->next != current) {
@@ -224,20 +224,20 @@ inline size_t posToBitmapIndex(Point pt) {
 
 */
 
-void timer_interrupt() {
-  if(!gameData.running)return;
+void timer_interrupt(volatile GameData * data) {
+  if(!data->running)return;
     // Change direction on new tick
-  gameData.direction = gameData.newDirection;
+  data->direction = data->newDirection;
   // Remember the current position as previous position
-  gameData.previous = gameData.current;
+  data->previous = data->current;
   // Move to the next position node which is now the end of the snake
-  gameData.current = gameData.current->next;
+  data->current = data->current->next;
   // Clear the snake sprite
-  setPosition(gameData.current->pos, 0);
+  setPosition(data, data->current->pos, 0);
   // Determine the new position of the snake
   Point dir{};
   Point future;
-  switch (gameData.direction) {
+  switch (data->direction) {
   case 0:
     dir = Point{1, 0};
     break;
@@ -251,52 +251,52 @@ void timer_interrupt() {
     dir = Point{0, -1};
     break;
   }
-  gameData.current->pos = gameData.previous->pos + dir;
-  future = gameData.current->pos + dir;
-  gameData.current->pos.setX((gameData.current->pos.x() + WIDTH) % WIDTH);
-  gameData.current->pos.setY((gameData.current->pos.y() + HEIGHT) % HEIGHT);
+  data->current->pos = data->previous->pos + dir;
+  future = data->current->pos + dir;
+  data->current->pos.setX((data->current->pos.x() + WIDTH) % WIDTH);
+  data->current->pos.setY((data->current->pos.y() + HEIGHT) % HEIGHT);
   future.setX((future.x() + WIDTH) % WIDTH);
   future.setY((future.y() + HEIGHT) % HEIGHT);
 
-  if (getPosition(gameData.current->pos) == 1) {
-    setPosition(gameData.current->pos, 2 + gameData.direction + 0x20);
-    spawnFood();
+  if (getPosition(data, data->current->pos) == 1) {
+    setPosition(data, data->current->pos, 2 + data->direction + 0x20);
+    spawnFood(data);
     SnakeNode *ins = new SnakeNode;
-    ins->next = gameData.current->next->next;
-    ins->pos = gameData.current->next->pos;
-    gameData.current->next->next = ins;
-  } else if (getPosition(gameData.current->pos) != 0) {
-    gameData.running=1;
-    std::strcpy((char*)gameData.bitmap, "    GAME OVER");
+    ins->next = data->current->next->next;
+    ins->pos = data->current->next->pos;
+    data->current->next->next = ins;
+  } else if (getPosition(data, data->current->pos) != 0) {
+    data->running=1;
+    std::strcpy((char*)data->bitmap, "    GAME OVER");
   } else {
-    setPosition(gameData.current->pos, 2 + gameData.direction + (getPosition(future) != 0?0x24:0));
+    setPosition(data, data->current->pos, 2 + data->direction + (getPosition(data, future) != 0?0x24:0));
   }
 
-  int head = (getPosition(gameData.previous->pos));
+  int head = (getPosition(data, data->previous->pos));
   if(head >= 0x26 && head <= 0x29) {
       head -= 0x24;
   }
 
   int thickness = (head & 0x20);
 
-  if ((head & 0x1F) == gameData.direction + 2 ) {
-    setPosition(gameData.previous->pos, gameData.direction + 18 + thickness);
+  if ((head & 0x1F) == data->direction + 2 ) {
+    setPosition(data, data->previous->pos, data->direction + 18 + thickness);
   } else
-      if ((head & 0x1F) == gameData.direction + 1 ||
-          (head & 0x1F) == gameData.direction + 5) {
-    setPosition(gameData.previous->pos, 10 + gameData.direction + thickness);
+      if ((head & 0x1F) == data->direction + 1 ||
+          (head & 0x1F) == data->direction + 5) {
+    setPosition(data, data->previous->pos, 10 + data->direction + thickness);
   } else
-      if ((head & 0x1F) == gameData.direction - 1 ||
-          (head & 0x1F) == gameData.direction + 3) {
-    setPosition(gameData.previous->pos, 14 + gameData.direction + thickness);
+      if ((head & 0x1F) == data->direction - 1 ||
+          (head & 0x1F) == data->direction + 3) {
+    setPosition(data, data->previous->pos, 14 + data->direction + thickness);
   }
 
 //  auto a = current->next->pos;
 //  auto b = current->next->next->pos;
 
-  int piece = (getPosition(gameData.current->next->pos) - 2) % 4;
+  int piece = (getPosition(data, data->current->next->pos) - 2) % 4;
   if(piece < 0) {
-      int orient = ((getPosition(gameData.current->next->next->pos) & 0x1F) - 2);
+      int orient = ((getPosition(data, data->current->next->next->pos) & 0x1F) - 2);
       int add;
       if(orient < 12)
           add = 3;
@@ -305,9 +305,9 @@ void timer_interrupt() {
           add = 5;
       else
           add = 0;
-      piece = (getPosition(gameData.current->next->next->pos) - 2 + add) % 4;
+      piece = (getPosition(data, data->current->next->next->pos) - 2 + add) % 4;
   }
-  setPosition(gameData.current->next->pos, piece + 6);
+  setPosition(data, data->current->next->pos, piece + 6);
 
 //  if (a.x() < b.x()) {
 //    setPosition(current->next->pos, 6);
@@ -319,19 +319,19 @@ void timer_interrupt() {
 //    setPosition(current->next->pos, 9);
 //  }
 
-  qDebug() << "Prev: " << getPosition(gameData.previous->pos) << " -> " << gameData.direction;
+  //qDebug() << "Prev: " << getPosition(data.previous->pos) << " -> " << data.direction;
 
-  SnakeNode *ptr = gameData.current->next;
-  qDebug() << "Positions";
+  SnakeNode *ptr = data->current->next;
+  //qDebug() << "Positions";
   do {
-    qDebug() << QPoint{ptr->pos.x(),ptr->pos.y()};
+    //qDebug() << QPoint{ptr->pos.x(),ptr->pos.y()};
 
     ptr = ptr->next;
-  } while (ptr != gameData.current->next);
-  if(gameData.running==1){
-      gameData.running=0;
+  } while (ptr != data->current->next);
+  if(data->running==1){
+      data->running=0;
 
-      setPosition(gameData.current->pos,0x22+gameData.direction);
+      setPosition(data, data->current->pos,0x22+data->direction);
   }
 }
 
@@ -406,7 +406,7 @@ void GameWindow::paintEvent(QPaintEvent *event) {
 }
 
 void GameWindow::timerEvent(QTimerEvent *event) {
-    timer_interrupt();
+    timer_interrupt(&gameData);
     update();
 }
 
