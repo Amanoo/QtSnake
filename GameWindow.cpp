@@ -1,17 +1,11 @@
-
 #include "GameWindow.hpp"
 
-#include <QDebug>
 #include <QKeyEvent>
 #include <QPainter>
 #include <qapplication.h>
 
 #include <iostream>
 #include <cstring>
-
-#define NORMAL_SNAKE
-
-
 
 constexpr int WIDTH = 16;
 constexpr int HEIGHT = 16;
@@ -46,89 +40,21 @@ static volatile struct GameData{
     SnakeNode *current, *previous;
 } gameData;
 
-void spawnFood(volatile GameData * data);
-
-void resetSnake(volatile GameData * data);
-
-void setPosition(volatile GameData * data, Point pos, int sprite);
-int getPosition(volatile GameData * data, Point pos);
-
-
-static void handle_key_interrupts(void* context)
-{
-    volatile GameData* data = (volatile GameData *)context;
-
-    // Get the pin that has triggered the edge interrupt
-    int edge_pin = IOWR_ALTERA_AVALON_PIO_EDGE_CAP(KEY_PIO_BASE);
-
-    // To prevent the interrupt from happening again without it being triggered, we need to reset it
-    // To do that, we'll write the pin bit to the edge capture register. It will then be reset.
-    IOWR_ALTERA_AVALON_PIO_EDGE_CAP(KEY_PIO_BASE, edge_pin);
-
-    if(!data->running){
-        data->running=2;
-        resetSnake(data);
-        spawnFood(data);
-        return;
-    }
-  switch (edge_pin) {
-  case 8://2^3
-    if (data->direction != 1)
-      data->newDirection = 3;
-    break;
-  case 1://2^0
-    if (data->direction != 2)
-      data->newDirection = 0;
-    break;
-  case 4://2^2
-    if (data->direction != 0)
-      data->newDirection = 2;
-    break;
-  case 2://2^1
-    if (data->direction != 3)
-      data->newDirection = 1;
-    break;
-  }
-
-}
-
-/*
-static void init_key_interrupt(volatile int *reg)
-{
-    // We first need to enable the interrupts. We have two buttons which are mapped to bit 0 and 1.
-    IOWR_ALTERA_AVALON_PIO_IRQ_MASK(KEY_PIO_BASE, 0x03);
-
-    // To make sure that the interrupts don't trigger immediately due to randomness,
-    // it's better to reset them just to be sure.
-    IOWR_ALTERA_AVALON_PIO_EDGE_CAP(KEY_PIO_BASE, 0x03);
-
-    // We can also provide it with a variable, the context.
-    // In this example we want it to point to a volatile int in which the triggered pin bit will be saved.
-    // The function only takes a void pointer, so we first need to take the address and then cast it to a void pointer.
-    void* reg_ptr = (void*)reg;
-
-    // Now we let the system know what to do when the interrupt happens.
-    // It should call the function handle_key_interrupts.
-    // Flags don't do anything, so let's just give NULL as value.
-    alt_ic_isr_register(KEY_PIO_IRQ_INTERRUPT_CONTROLLER_ID, KEY_PIO_IRQ, handle_key_interrupts, reg_ptr, NULL);
-}*/
-
-void setPosition(volatile GameData * data, Point pos, int sprite) {
+void setPosition(volatile GameData* data, Point pos, int sprite) {
   data->bitmap[(pos.y() * WIDTH + pos.x())] = (size_t(sprite) & 0xFFUL) | 0x80UL;
 }
 
-int getPosition(volatile GameData * data, Point pos) {
+int getPosition(volatile GameData* data, Point pos) {
   return data->bitmap[(pos.y() * WIDTH + pos.x())] & 0x7F;
 }
 
-void spawnFood(volatile GameData * data) {
-#if 1
+void spawnFood(volatile GameData* data) {
   Point validPoints[HEIGHT*WIDTH];
   uint16_t size = 0;
   for (int wid =0;wid<WIDTH;wid++) {
       for (int hei=0;hei<HEIGHT;hei++){
           Point pos = Point{wid, hei};
-          if(data, getPosition(data, pos)==0){
+          if(getPosition(data, pos)==0){
             validPoints[size]=pos;
             size++;
           }
@@ -137,21 +63,12 @@ void spawnFood(volatile GameData * data) {
 
   int chosen=rand() % size;
   setPosition(data, validPoints[chosen], 1);
-#else
-  QPoint pos{qrand() % WIDTH, qrand() % HEIGHT};
-
-  while (getPosition(pos) != 0)
-    pos = QPoint{qrand() % WIDTH, qrand() % HEIGHT};
-
-  setPosition(pos, 1);
-#endif
 }
 
 
 
-void resetSnake(volatile GameData * data) {
+void resetSnake(volatile GameData* data) {
 memset(data->bitmap,0x80,WIDTH*HEIGHT);
-#ifdef NORMAL_SNAKE
     data->direction = data->newDirection = 0;
   while (data->current->next != data->current) {
     SnakeNode *del = data->current->next;
@@ -184,47 +101,17 @@ memset(data->bitmap,0x80,WIDTH*HEIGHT);
 
 
   data->previous = data->current->next;
-
-#else
-  while (current->next->pos != current->pos && current->next->next != current) {
-    SnakeNode *del = current->next;
-    current->next = del->next;
-    delete del;
-  }
-
-  while (current->next->next != current) {
-    SnakeNode *del = current->next;
-    current->next = del->next;
-    setPosition(del->pos, 0);
-    delete del;
-  }
-#endif
 }
-
 
 Point operator+( Point const& lhs, Point const& rhs ){
     return Point{lhs.xpos+rhs.xpos,lhs.ypos+rhs.ypos};
 }
 
-
 inline size_t posToBitmapIndex(Point pt) {
   return (pt.y() * WIDTH + pt.x()) / 2;
 }
 
-
-
-
-
-
-/*
-
-  [1] [2] [3] [4]
-
-
-
-*/
-
-void timer_interrupt(volatile GameData * data) {
+void timer_interrupt(volatile GameData* data) {
   if(!data->running)return;
     // Change direction on new tick
   data->direction = data->newDirection;
@@ -291,9 +178,6 @@ void timer_interrupt(volatile GameData * data) {
     setPosition(data, data->previous->pos, 14 + data->direction + thickness);
   }
 
-//  auto a = current->next->pos;
-//  auto b = current->next->next->pos;
-
   int piece = (getPosition(data, data->current->next->pos) - 2) % 4;
   if(piece < 0) {
       int orient = ((getPosition(data, data->current->next->next->pos) & 0x1F) - 2);
@@ -309,23 +193,8 @@ void timer_interrupt(volatile GameData * data) {
   }
   setPosition(data, data->current->next->pos, piece + 6);
 
-//  if (a.x() < b.x()) {
-//    setPosition(current->next->pos, 6);
-//  } else if (a.x() > b.x()) {
-//    setPosition(current->next->pos, 8);
-//  } else if (a.y() < b.y()) {
-//    setPosition(current->next->pos, 7);
-//  } else if (a.y() > b.y()) {
-//    setPosition(current->next->pos, 9);
-//  }
-
-  //qDebug() << "Prev: " << getPosition(data.previous->pos) << " -> " << data.direction;
-
   SnakeNode *ptr = data->current->next;
-  //qDebug() << "Positions";
   do {
-    //qDebug() << QPoint{ptr->pos.x(),ptr->pos.y()};
-
     ptr = ptr->next;
   } while (ptr != data->current->next);
   if(data->running==1){
@@ -335,14 +204,52 @@ void timer_interrupt(volatile GameData * data) {
   }
 }
 
+static void handle_key_interrupts(void* context)
+{
+    volatile GameData* data = (volatile GameData *)context;
+
+    // Get the pin that has triggered the edge interrupt
+    int edge_pin = IOWR_ALTERA_AVALON_PIO_EDGE_CAP(KEY_PIO_BASE);
+
+    // To prevent the interrupt from happening again without it being triggered, we need to reset it
+    // To do that, we'll write the pin bit to the edge capture register. It will then be reset.
+    IOWR_ALTERA_AVALON_PIO_EDGE_CAP(KEY_PIO_BASE, edge_pin);
+
+    if(!data->running){
+        data->running=2;
+        resetSnake(data);
+        spawnFood(data);
+        return;
+    }
+  switch (edge_pin) {
+  case 1://2^0
+    if (data->direction != 2)
+      data->newDirection = 0;
+    break;
+  case 2://2^1
+    if (data->direction != 3)
+      data->newDirection = 1;
+    break;
+  case 4://2^2
+    if (data->direction != 0)
+      data->newDirection = 2;
+    break;
+  case 8://2^3
+    if (data->direction != 1)
+      data->newDirection = 3;
+    break;
+  }
+
+}
+
 static void init_key_interrupt(volatile GameData *reg)
 {
-    // We first need to enable the interrupts. We have two buttons which are mapped to bit 0, 1, 2, and 3.
-    IOWR_ALTERA_AVALON_PIO_IRQ_MASK(KEY_PIO_BASE, 0x0F);
+    // We first need to enable the interrupts. We have two buttons which are mapped to bit 0 and 1.
+    IOWR_ALTERA_AVALON_PIO_IRQ_MASK(KEY_PIO_BASE, 0x03);
 
     // To make sure that the interrupts don't trigger immediately due to randomness,
     // it's better to reset them just to be sure.
-    IOWR_ALTERA_AVALON_PIO_EDGE_CAP(KEY_PIO_BASE, 0x0F);
+    IOWR_ALTERA_AVALON_PIO_EDGE_CAP(KEY_PIO_BASE, 0x03);
 
     // We can also provide it with a variable, the context.
     // In this example we want it to point to a volatile int in which the triggered pin bit will be saved.
@@ -364,12 +271,6 @@ int mmain(void){
 
     gameData.current = new SnakeNode;
     gameData.current->next = gameData.current;
-
-    //setupinterrupts
-    while(1){
-
-    }
-    return 0;
 }
 
 
@@ -381,7 +282,6 @@ GameWindow::GameWindow(QWidget *parent)
   startTimer(400);
 
   mmain();
-
 }
 
 GameWindow::~GameWindow() {}
@@ -399,8 +299,6 @@ void GameWindow::paintEvent(QPaintEvent *event) {
       paint.drawPixmap(tile, sprites,
                        QRect(QPoint{idx % 16, idx / 16} * sprites.width() / 16,
                              sprites.size()/16));
-//      paint.drawText(tile, Qt::AlignCenter, QString("%1").arg(idx, 1, 16));
-//      paint.drawRect(tile);
     }
   }
 }
@@ -412,17 +310,17 @@ void GameWindow::timerEvent(QTimerEvent *event) {
 
 void GameWindow::keyPressEvent(QKeyEvent *event) {
   switch (event->key()) {
-  case Qt::Key_Up:
-      IORD_ALTERA_AVALON_PIO_EDGE_CAP_KEY_PIO_BASE = 8;//2^3;
-    break;
   case Qt::Key_Right:
       IORD_ALTERA_AVALON_PIO_EDGE_CAP_KEY_PIO_BASE = 1;//2^0;
+    break;
+  case Qt::Key_Down:
+      IORD_ALTERA_AVALON_PIO_EDGE_CAP_KEY_PIO_BASE = 2;//2^1;
     break;
   case Qt::Key_Left:
       IORD_ALTERA_AVALON_PIO_EDGE_CAP_KEY_PIO_BASE = 4;//2^2;
     break;
-  case Qt::Key_Down:
-      IORD_ALTERA_AVALON_PIO_EDGE_CAP_KEY_PIO_BASE = 2;//2^1;
+  case Qt::Key_Up:
+      IORD_ALTERA_AVALON_PIO_EDGE_CAP_KEY_PIO_BASE = 8;//2^3;
     break;
   }
   handle_key_interrupts((void*)&gameData);
